@@ -179,7 +179,7 @@ def solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess,problem_type=SLEPc.EPS.ProblemType
     for i in range(evals):
         eigVal = E.getEigenvalue(i)
         omega  = eigVal*kt
-
+        print eigVal
         E.getEigenvector(i,vr,vi)
 
         # when we want to make the guessVec file
@@ -204,7 +204,6 @@ def solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess,problem_type=SLEPc.EPS.ProblemType
             plt.title(['   m = ', (kt),
             '   i = ', (i),
             '   gr (direct) = ', omega.imag])
-            print eigVal
             #plt.show()
 
 if __name__ == '__main__':
