@@ -126,7 +126,6 @@ def build_AB(m,r,z,Lap,Pr_bar,Qr_bar,parms):
 
     Pr_bar = Pr_bar.ravel(order='F')
     Qr_bar = Qr_bar.ravel(order='F')
-    Qr_bP = PETSc.Vec().createWithArray(Qr_bar)
 
     Print("\nB build time:")
     tB1 = time.time()
