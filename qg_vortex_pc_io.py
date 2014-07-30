@@ -204,7 +204,7 @@ def solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess,kt,nconvAr,ncCnt,problem_type=SLEP
         Print("\nNo eigenvalues have converged\n")
         return
 
-    Print("\nEigenvalues: ")
+    # Print("\nEigenvalues: ")
 
     for i in range(nconv):
         eigVal = E.getEigenvalue(i)
