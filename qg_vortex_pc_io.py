@@ -235,6 +235,7 @@ def solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess,kt,nconvAr,ncCnt,problem_type=SLEP
 
     # Sort and Plot. 
     #You don't have to do this block if you just want to use the read_qg_vortex file
+    """
     if rank == 0:
         eigVals = np.fromfile('eigVals',dtype=np.complex128)
         eigVecs = np.fromfile('eigVecs',dtype=np.complex128)
@@ -265,6 +266,7 @@ def solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess,kt,nconvAr,ncCnt,problem_type=SLEP
             if i == 0:
                 plt.savefig('QG_Vortex.eps', format='eps', dpi=1000)
             #plt.show()
+    """
 
 if __name__ == '__main__':
     opts = PETSc.Options()
