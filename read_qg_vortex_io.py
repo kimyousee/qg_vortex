@@ -41,7 +41,10 @@ for eSolve in range((len(nconvData)-1)/2):
     countEigVals = 0
     while np.imag(eigVals[countEigVals]) > 1e-11:
         countEigVals+=1
-
+        
+    if countEigVals == 0:
+        Print("No valid eigenvalues have converged")
+    
     # Print eigenvalues and plot eigenvector
     for i in range(countEigVals):
         print eigVals[i]
