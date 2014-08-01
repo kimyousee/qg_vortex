@@ -246,7 +246,7 @@ def solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess,kt,nconvAr,ncCnt,problem_type=SLEP
         eigVals = kt*eigVals[ind]
 
         countEigVals = 0
-        while np.imag(eigVals[countEigVals]) > 1e-11:
+        while (countEigVals < eigVals.shape[0] and np.imag(eigVals[countEigVals]) > 1e-11):
             countEigVals+=1
 
         if countEigVals == 0:
