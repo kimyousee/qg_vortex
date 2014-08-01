@@ -39,7 +39,7 @@ for eSolve in range((len(nconvData)-1)/2):
 
     # Count how many eigenvalues are valid
     countEigVals = 0
-    while np.imag(eigVals[countEigVals]) > 1e-11:
+    while (countEigVals < eigVals.shape[0] and np.imag(eigVals[countEigVals]) > 1e-11):
         countEigVals+=1
         
     if countEigVals == 0:
