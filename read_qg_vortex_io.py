@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+np.set_printoptions(precision=3)
 
 # Script to read in data that was made already with qg_vortex_pc_timing.py
 
@@ -44,20 +45,48 @@ for eSolve in range((len(nconvData)-1)/2):
         
     if countEigVals == 0:
         print("No valid eigenvalues have converged")
-    
+    print("\nEigenvalues: \n")
     # Print eigenvalues and plot eigenvector
+
     for i in range(countEigVals):
         print eigVals[i]
         omega  = eigVals[i]*kt
         eigVec1 = eigVecs[i]
         psi = eigVec1.reshape([Nz-2,N2],order='F')
-        lvl = np.linspace(psi.real.min(),psi.real.max(),20)
-        plt.contourf(r[1:N2+1]/1e3, z[1:Nz-1]/1e3, psi.real, levels=lvl)
-        plt.colorbar()
+        lvlr = np.linspace(psi.real.min(),psi.real.max(),20)
+        lvli = np.linspace(psi.imag.min(),psi.imag.max(),20)
+        fig = plt.figure()
+
+        plt.rcParams["axes.titlesize"] = 8
+        rmode = fig.add_subplot(1,2,1)
+        rmode.tick_params(axis='both', labelsize=8)
+        plt.contourf(r[1:N2+1]/1e3, z[1:Nz-1]/1e3, psi.real, levels=lvlr)
+        rcbar = plt.colorbar()
+        cl = plt.getp(rcbar.ax,'ymajorticklabels')
+        plt.setp(cl,fontsize=8)
+
         plt.xlabel('r')
         plt.ylabel('z')
-        plt.title(['   m = ', (kt),
-                   '   gr (direct) = ', omega.imag])
-        #plt.savefig('QG_Vortex.eps', format='eps', dpi=1000)
+        gr = np.array([omega.imag])
+        plt.title(['   psi.real',
+                   '   m = ', kt,
+                   '   gr = ', gr ])
+
+        imode = fig.add_subplot(1,2,2)
+        imode.tick_params(axis='both', labelsize=8)
+        plt.contourf(r[1:N2+1]/1e3, z[1:Nz-1]/1e3, psi.imag, levels=lvli)
+        icbar = plt.colorbar()
+        icl = plt.getp(icbar.ax,'ymajorticklabels')
+        plt.setp(icl,fontsize=8)
+
+        plt.xlabel('r')
+        plt.ylabel('z')
+        plt.title(['   psi.imag',
+                   '   m = ', kt,
+                   '   gr = ', gr ])
+
+        fig = "QG_Vortex_m%d" % i
+        plt.savefig(fig, format='eps', dpi=1000)
         plt.show()
 
+print ""
