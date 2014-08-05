@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-np.set_printoptions(precision=3)
 
 # Script to read in data that was made already with qg_vortex_pc_timing.py
 
@@ -67,10 +66,8 @@ for eSolve in range((len(nconvData)-1)/2):
 
         plt.xlabel('r')
         plt.ylabel('z')
-        gr = np.array([omega.imag])
-        plt.title(['   psi.real',
-                   '   m = ', kt,
-                   '   gr = ', gr ])
+        title = " m = %d  [real] gr  = %.3e" % (kt,omega.imag)
+        plt.title(title)
 
         imode = fig.add_subplot(1,2,2)
         imode.tick_params(axis='both', labelsize=8)
@@ -81,9 +78,8 @@ for eSolve in range((len(nconvData)-1)/2):
 
         plt.xlabel('r')
         plt.ylabel('z')
-        plt.title(['   psi.imag',
-                   '   m = ', kt,
-                   '   gr = ', gr ])
+        title = " m = %d  [imag] gr  = %.3e" % (kt,omega.imag)
+        plt.title(title)
 
         fig = "QG_Vortex_m%d" % i
         plt.savefig(fig, format='eps', dpi=1000)
