@@ -9,6 +9,7 @@ import scipy.sparse as sp
 import matplotlib.pyplot as plt
 import scipy.linalg as spalg
 from scipy.sparse.linalg import eigs
+import os
 
 Print = PETSc.Sys.Print
 rank = PETSc.COMM_WORLD.Get_rank()
@@ -163,8 +164,8 @@ class parms(object):
 def solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess,kt,nconvAr,ncCnt,problem_type=SLEPc.EPS.ProblemType.GNHEP):
     rank = PETSc.COMM_WORLD.getRank()
     size = PETSc.COMM_WORLD.getSize()
-    eigVals = open('eigVals','wb')
-    eigVecs = open('eigVecs','wb')
+    eigVals = open('storage/eigVals','wb')
+    eigVecs = open('storage/eigVecs','wb')
     E = SLEPc.EPS(); E.create(comm=SLEPc.COMM_WORLD)
 
     # for when we want to use the guessVec file as a guess
@@ -204,8 +205,6 @@ def solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess,kt,nconvAr,ncCnt,problem_type=SLEP
         Print("\nNo eigenvalues have converged\n")
         return
 
-    # Print("\nEigenvalues: ")
-
     for i in range(nconv):
         eigVal = E.getEigenvalue(i)
         omega  = eigVal*kt
@@ -233,42 +232,11 @@ def solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess,kt,nconvAr,ncCnt,problem_type=SLEP
 
     eigVals.close();eigVecs.close();data.close()
 
-    # Sort and Plot. 
-    #You don't have to do this block if you just want to use the read_qg_vortex file
-    """
-    if rank == 0:
-        eigVals = np.fromfile('eigVals',dtype=np.complex128)
-        eigVecs = np.fromfile('eigVecs',dtype=np.complex128)
-        eigVecs = eigVecs.reshape([nconv,vr.getSize()])
-
-        ind = (-np.imag(eigVals)).argsort()
-        eigVecs = eigVecs[ind,:]
-        eigVals = kt*eigVals[ind]
-
-        countEigVals = 0
-        while (countEigVals < eigVals.shape[0] and np.imag(eigVals[countEigVals]) > 1e-11):
-            countEigVals+=1
-
-        if countEigVals == 0:
-            Print("No valid eigenvalues have converged")
-
-        for i in range(countEigVals):
-            print eigVals[i]/kt
-            eigVec1 = eigVecs[i]
-            psi = eigVec1.reshape([Nz-2,N2],order='F')
-            lvl = np.linspace(psi.real.min(),psi.real.max(),20)
-            plt.contourf(r[1:N2+1]/1e3, z[1:Nz-1]/1e3, psi.real, levels=lvl)
-            plt.colorbar()
-            plt.xlabel('r')
-            plt.ylabel('z')
-            plt.title(['   m = ', (kt),
-            '   gr (direct) = ', omega.imag])
-            if i == 0:
-                plt.savefig('QG_Vortex.eps', format='eps', dpi=1000)
-            #plt.show()
-    """
-
 if __name__ == '__main__':
+    OutpDir = "storage"
+    if not os.path.exists(OutpDir):
+        os.mkdir(OutpDir)
+
     opts = PETSc.Options()
     nEV = opts.getInt('nev', 5)
     setSpace = opts.getBool('setSpace', True) # true = write eigenvec to binary file
@@ -282,8 +250,8 @@ if __name__ == '__main__':
     parmsArr = np.array([Lr,Lz,f,g,N,Ro,Lv,Lh,Bu,Nr,Nz,nEV]) #note pr is not included in the array/file
     
     # Store data in files
-    data = open("InputData", "wb")
-    nconvData = open("nconvData","wb")
+    data = open("storage/InputData", "wb")
+    nconvData = open("storage/nconvData","wb")
 
     if rank == 0:
         parmsArr.tofile(data)
