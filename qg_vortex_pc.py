@@ -78,8 +78,8 @@ def geometry(Nr,Nz,parms):
     Dz2[0,0:3] = [1,-2,1]/hz**2
     Dz2[Nz-1,Nz-3:Nz] = [1,-2,1]/hz**2
 
-    sp.dia_matrix(Dr); sp.dia_matrix(Dr2)
-    sp.dia_matrix(Dz); sp.dia_matrix(Dz2)
+    Dr = sp.csr_matrix(Dr); Dr2 = sp.csr_matrix(Dr2)
+    Dz = sp.csr_matrix(Dz); Dz2 = sp.csr_matrix(Dz2)
 
     return [Dr,Dr2,r,Dz,Dz2,z]
 
@@ -90,19 +90,19 @@ def build_Lap(r,z,Dr,Dr2,Dz,Dz2,parms):
     M  = len(z)
 
     # Dirichlet BCs:
-    D1d = sp.dia_matrix(Dr2[1:N2+1, 1:N2+1])
-    D2d = sp.dia_matrix(Dr2[1:N2+1, N-2:N2:-1])
-    E1d = sp.dia_matrix(Dr[ 1:N2+1, 1:N2+1])
-    E2d = sp.dia_matrix(Dr[ 1:N2+1, N-2:N2:-1])
+    D1d = sp.csr_matrix(Dr2[1:N2+1, 1:N2+1])
+    D2d = sp.csr_matrix(Dr2[1:N2+1, N-2:N2:-1])
+    E1d = sp.csr_matrix(Dr[ 1:N2+1, 1:N2+1])
+    E2d = sp.csr_matrix(Dr[ 1:N2+1, N-2:N2:-1])
     
     # Neumann BCs in z
     temp = -np.linalg.inv(np.array([ [Dz[0,0],Dz[0,M-1]],[Dz[M-1,0],Dz[M-1,M-1]] ]))
-    BCz1 = np.dot(temp,Dz[ [0,M-1], 1:M-1 ])
-    Dzz  = sp.dia_matrix(Dz2[1:M-1,1:M-1] + np.dot(Dz2[1:M-1,[0,M-1]],BCz1))
+    BCz1 = temp*Dz[ [0,M-1], 1:M-1 ]
+    Dzz  = sp.csr_matrix(Dz2[1:M-1,1:M-1] + Dz2[1:M-1,[0,M-1]]*BCz1)
 
     # Laplacian in polar coordinates:  d_rr + 1/r*d_r + Bu*d_zz
     # Note that this does not include the azimumthal derivative
-    R = sp.dia_matrix(np.diag(1/r[1:N2+1]))
+    R = sp.csr_matrix(np.diag(1/r[1:N2+1]))
     Lap = petscKron( (D1d+D2d+R*(E1d+E2d)).todense(), np.eye(M-2) ) + Bu*petscKron(np.eye(N2),Dzz.todense())
     
     return Lap
@@ -115,48 +115,40 @@ def build_AB(m,r,z,Lap,Pr_bar,Qr_bar,parms):
 
     Pr_bar = Pr_bar.ravel(order='F')
     Qr_bar = Qr_bar.ravel(order='F')
+    Qr_bP = PETSc.Vec().createWithArray(Qr_bar)
 
     B = PETSc.Mat().createAIJ(Lap.getSize())
     B = Lap - petscKron(np.diag(m**2/(r[1:N2+1]**2)), np.eye(Nz-2))
 
     Pr_bP = B.getVecLeft()
-    sp,ep = Pr_bP.getOwnershipRange()
-    Pr_bP[sp:ep] = Pr_bar[sp:ep]
+    Pr_bP.array = Pr_bar
 
-    Qr_bP = B.getVecLeft()
-    sq,eq = Qr_bP.getOwnershipRange()
-    Qr_bP[sq:eq] = Qr_bar[sq:eq]
-    Qr_bP.assemble()
-
-    A = PETSc.Mat().createAIJ(B.getSize())
     A = B.copy()
-    
+
     A.diagonalScale(Pr_bP)
     A.setDiagonal(-Qr_bP,addv=True)
+
     A.assemble()
 
     return A, B
 
 class parms(object):
-    def __init__(self,Lr,Lz,f,g,N,Ro,Lv,Lh,Bu,pr,Nr,Nz):
-        self.Lr = Lr # Horizontal scale
-        self.Lz = Lz # Vertical scale
-        self.f  = f  # Coriols Parameters
-        self.g  = g  # Gravity
-        self.N  = N  # buoyancy frequency
-        self.Ro = Ro
-        self.Lv = Lv # normalized depth
-        self.Lh = Lh # normalized width
-        self.Bu = Bu # Burger number
-        self.pr = pr # 'BT' or 'BC'
-        self.Nr = Nr
-        self.Nz = Nz
-        
-def solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess,kt,problem_type=SLEPc.EPS.ProblemType.GNHEP):
+    def __init__(self,Lr,Lz,f,g,N,Ro,Lv,Lh,Bu,pr):
+        self.Lr =  Lr # Horizontal scale
+        self.Lz =  Lz # Vertical scale
+        self.f  =  f  # Coriols Parameters
+        self.g  =  g  # Gravity
+        self.N  =  N  # buoyancy frequency
+        self.Ro =  Ro
+        self.Lv =  Lv # normalized depth
+        self.Lh =  Lh # normalized width
+        self.Bu =  Bu # Burger number
+        self.pr =  pr # 'BT' or 'BC'
+
+def solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess,problem_type=SLEPc.EPS.ProblemType.GNHEP):
     rank = PETSc.COMM_WORLD.getRank()
     size = PETSc.COMM_WORLD.getSize()
-    eigVals = open('eigVals','wb')
-    eigVecs = open('eigVecs','wb')
+
     E = SLEPc.EPS(); E.create(comm=SLEPc.COMM_WORLD)
 
     # for when we want to use the guessVec file
@@ -168,9 +160,9 @@ def solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess,kt,problem_type=SLEPc.EPS.ProblemT
     E.setOperators(A,B)
     E.setDimensions(nEV, PETSc.DECIDE)
     E.setProblemType(problem_type)
-    #E.setWhichEigenpairs(SLEPc.EPS.Which.LARGEST_IMAGINARY)
+    E.setWhichEigenpairs(SLEPc.EPS.Which.LARGEST_IMAGINARY)
     E.setTarget(guess)
-    E.setTolerances(1e-5, max_it=100)
+    #E.setTolerances(1e-5, max_it=100)
     
     E.setFromOptions()
     #E.view()
@@ -183,75 +175,73 @@ def solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess,kt,problem_type=SLEPc.EPS.ProblemT
     nconv = E.getConverged()
     if nconv <= nEV: evals = nconv
     else: evals = nEV
-    eigValsnp = np.zeros(evals,dtype=complex)
-    eigVecsnp = np.zeros([evals,vr.getSize()],dtype=complex)
-    
 
-    Print("\nEigenvalues: ")
     for i in range(evals):
         eigVal = E.getEigenvalue(i)
         omega  = eigVal*kt
-        
-        eigValsnp[i] = eigVal # store eigenvalue
-        if rank == 0:
-            eigValsnp[i].tofile(eigVals)
-        # eigVal.astype(np.complex64).tofile(eigVals)
-        # Print(eigVal)
 
         E.getEigenvector(i,vr,vi)
+
+        # when we want to make the guessVec file
+        if setSpace == True:
+            guessVec = PETSc.Viewer().createBinary('guessVec.bin','w') 
+            guessVec(vr)
 
         scatter, vrSeq = PETSc.Scatter.toZero(vr)
         im = PETSc.InsertMode.INSERT_VALUES
         sm = PETSc.ScatterMode.FORWARD
         scatter.scatter(vr,vrSeq,im,sm)
+
         if rank == 0:
-            for j in range(0,vrSeq.getSize()):
-                eigVecsnp[i,j] = vrSeq[j] # + 1j*vi[j]
-                eigVecsnp[i,j].tofile(eigVecs)
+            psi = np.empty(vr.getSize(),dtype='complex')
 
-    eigVals.close();eigVecs.close()
+            for i in range(0,vrSeq.getSize()):
+                psi[i] = vrSeq[i].real+vrSeq[i].imag*1j
+            psi = psi.reshape([Nz-2,N2],order='F')
+            lvlr = np.linspace(psi.real.min(),psi.real.max(),20)
+            lvli = np.linspace(psi.imag.min(),psi.imag.max(),20)
+            fig = plt.figure()
 
-    if rank == 0:
-        eigVals = np.fromfile('eigVals',dtype=np.complex128)
-        eigVecs = np.fromfile('eigVecs',dtype=np.complex128)
-        eigVecs = eigVecs.reshape([evals,vr.getSize()])
+            plt.rcParams["axes.titlesize"] = 8
+            rmode = fig.add_subplot(2,1,1)
+            rmode.tick_params(axis='both', labelsize=8)
+            plt.contourf(r[1:N2+1]/1e3, z[1:Nz-1]/1e3, psi.real, levels=lvlr)
+            rcbar = plt.colorbar()
+            cl = plt.getp(rcbar.ax,'ymajorticklabels')
+            plt.setp(cl,fontsize=8)
 
-        ind = (-np.imag(eigVals)).argsort()
-
-        eigVecs = eigVecs[ind,:]
-        eigVals = kt*eigVals[ind]
-
-        countEigVals = 0
-        while np.imag(eigVals[countEigVals]) > 1e-11:
-            countEigVals+=1
-
-        for i in range(countEigVals):
-            print eigVals[i]/kt
-            eigVec1 = eigVecs[i]
-            psi = eigVec1.reshape([Nz-2,N2],order='F')
-            lvl = np.linspace(psi.real.min(),psi.real.max(),20)
-            plt.contourf(r[1:N2+1]/1e3, z[1:Nz-1]/1e3, psi.real, levels=lvl)
-            plt.colorbar()
             plt.xlabel('r')
             plt.ylabel('z')
-            plt.title(['   m = ', (kt),
-            '   i = ', (i),
-            '   gr (direct) = ', omega.imag])
-            if i == 0:
-                plt.savefig('QG_Vortex.eps', format='eps', dpi=1000)
-            #plt.show()
+            title = " m = %d  [real] gr  = %.3e" % (kt,omega.imag)
+            plt.title(title)
+
+            imode = fig.add_subplot(2,1,2)
+            imode.tick_params(axis='both', labelsize=8)
+            plt.contourf(r[1:N2+1]/1e3, z[1:Nz-1]/1e3, psi.imag, levels=lvli)
+            icbar = plt.colorbar()
+            icl = plt.getp(icbar.ax,'ymajorticklabels')
+            plt.setp(icl,fontsize=8)
+
+            plt.xlabel('r')
+            plt.ylabel('z')
+            title = " m = %d  [imag] gr  = %.3e" % (kt,omega.imag)
+            plt.title(title)
+
+            fig = "QG_Vortex_m.eps"
+            plt.savefig(fig, format='eps', dpi=1000)
+            plt.show()
 
 if __name__ == '__main__':
     opts = PETSc.Options()
     nEV = opts.getInt('nev', 5)
-    Nr  = opts.getInt('Nr', 41)
-    Nz  = opts.getInt('Nz', 20)
     setSpace = opts.getBool('setSpace', True) # true = write eigenvec to binary file
 
     ## Specify Physical Parameters
                  #Lr,Lz,f,   g,   N,              Ro,Lv,Lh, Bu,    pr
-    parms = parms(6, 6, 8e-5,9.81,np.sqrt(5)*1e-3, 1, 1, 1, 0.1**2,'BC',Nr,Nz)
+    parms = parms(6, 6, 8e-5,9.81,np.sqrt(5)*1e-3, 1, 1, 1, 0.1**2,'BC')
 
+    Nr  = opts.getInt('Nr', 41)
+    Nz  = opts.getInt('Nz', 20)
     M  = Nz/2
     N2 = (Nr-1)/2
 
@@ -292,7 +282,7 @@ if __name__ == '__main__':
 
         A, B = build_AB(kt,r,z,Lap,Pr_b,Qr_b,parms)
         
-        solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess,kt)
+        solve_eigensystem(A,B,nEV,cnt,Nz,N2,guess)
 
         cnt += 1
 
