@@ -42,8 +42,8 @@ def geometry(Nr,Nz,parms):
     Dz2[0,0:3] = [1,-2,1]/hz**2
     Dz2[Nz-1,Nz-3:Nz] = [1,-2,1]/hz**2
 
-    sp.dia_matrix(Dr); sp.dia_matrix(Dr2)
-    sp.dia_matrix(Dz); sp.dia_matrix(Dz2)
+    sp.csr_matrix(Dr); sp.csr_matrix(Dr2)
+    sp.csr_matrix(Dz); sp.csr_matrix(Dz2)
 
     return [Dr,Dr2,r,Dz,Dz2,z]
 
@@ -54,21 +54,21 @@ def build_Lap(r,z,Dr,Dr2,Dz,Dz2,parms):
     M  = len(z)
 
     # Dirichlet BCs:
-    D1d = sp.dia_matrix(Dr2[1:N2+1, 1:N2+1])
-    D2d = sp.dia_matrix(Dr2[1:N2+1, N-2:N2:-1])
-    E1d = sp.dia_matrix(Dr[ 1:N2+1, 1:N2+1])
-    E2d = sp.dia_matrix(Dr[ 1:N2+1, N-2:N2:-1])
+    D1d = sp.csr_matrix(Dr2[1:N2+1, 1:N2+1])
+    D2d = sp.csr_matrix(Dr2[1:N2+1, N-2:N2:-1])
+    E1d = sp.csr_matrix(Dr[ 1:N2+1, 1:N2+1])
+    E2d = sp.csr_matrix(Dr[ 1:N2+1, N-2:N2:-1])
     #print D1d.todense()
 
     # Neumann BCs in z
     BCz1 = -np.linalg.solve(
         np.array([ [Dz[0,0],Dz[0,M-1]],[Dz[M-1,0],Dz[M-1,M-1]] ]),
                     Dz[ [0,M-1], 1:M-1 ])
-    Dzz  = sp.dia_matrix(Dz2[1:M-1,1:M-1] + np.dot(Dz2[1:M-1,[0,M-1]],BCz1))
+    Dzz  = sp.csr_matrix(Dz2[1:M-1,1:M-1] + np.dot(Dz2[1:M-1,[0,M-1]],BCz1))
     
     # Laplacian in polar coordinates:  d_rr + 1/r*d_r + Bu*d_zz
     # Note that this does not include the azimumthal derivative
-    R = sp.dia_matrix(np.diag(1/r[1:N2+1]))
+    R = sp.csr_matrix(np.diag(1/r[1:N2+1]))
     Lap = sp.kron( (D1d+D2d+R*(E1d+E2d)), np.eye(M-2) )+Bu*sp.kron(np.eye(N2),Dzz)
     return Lap
 
@@ -81,9 +81,10 @@ def build_AB(m,r,z,Lap,Pr_bar,Qr_bar,parms):
     Pr_bar = Pr_bar.ravel(order='F')
     Qr_bar = Qr_bar.ravel(order='F')
 
-    B = Lap - np.kron(np.diag(m**2/(r[1:N2+1]**2)), np.eye(Nz-2))
+    B = Lap - sp.kron(np.diag(m**2/(r[1:N2+1]**2)), np.eye(Nz-2))
     A = np.diag(Pr_bar)*B - np.diag(Qr_bar)*np.eye((Nz-2)*N2)
-
+    B = sp.csr_matrix(B)
+    A = sp.csr_matrix(A)
     return A, B
 
 class parms(object):
@@ -155,13 +156,13 @@ if __name__ == '__main__':
     #print ((zin+Lz/2)**2)/(Lv**2)
 
     cnt = 0
-    for kt in range(2,3): #ktv=2
+    for kt in range(2,3): #ktv=1
         # Build A and B for eigen-analysis
 
         A, B = build_AB(kt,r,z,Lap,Pr_b,Qr_b,parms)
 
         # Using eig
-        eigVals, eigVecs = spalg.eig(A,B)
+        eigVals, eigVecs = spalg.eig(A.todense(),B.todense())
         ind = (-np.imag(eigVals)).argsort() #get indices in descending order
         eigVecs = eigVecs[:,ind]
         eigVals = kt*eigVals[ind]
@@ -176,18 +177,19 @@ if __name__ == '__main__':
 
         lvlr = np.linspace(psi1.real.min(),psi1.real.max(),20)
 
+        plt.rcParams["axes.titlesize"] = 8
         plt.xlabel('r')
         plt.ylabel('z')
         plt.contourf(r[1:N2+1]/1e3, z[1:Nz-1]/1e3, psi1.real, levels=lvlr)
         plt.colorbar()
         plt.title(['   m = ', (kt),
         '   ii = ', (ii),
-        '   gr (indirect) = ', (omega1[ii].imag )])
+        '   gr (direct) = ', (omega1[ii].imag )])
         plt.show()
 
         # Using eigs
         sig0 = eigVals[ii]
-        evals_all, evecs_all = eigs(A,nEV,B,which='LI',maxiter=500,sigma=sig0)
+        evals_all, evecs_all = eigs(A,10,B,ncv=21,which='LI',maxiter=500,sigma=sig0)
 
         growth2 = (evals_all[ii]*kt).imag
         freq2   = (evals_all[ii]*kt).real
@@ -196,14 +198,14 @@ if __name__ == '__main__':
         psi2 = evecs_all[:,ii].reshape([Nz-2,N2],order='F')
 
         lvlr2 = np.linspace(psi2.real.min(),psi2.real.max(),20)
-
         plt.xlabel('r')
         plt.ylabel('z')
         plt.contourf(r[1:N2+1]/1e3, z[1:Nz-1]/1e3, psi2.real, levels=lvlr2)
         plt.colorbar()
         plt.title(['   m = ', (kt),
         '   ii = ', (ii),
-        '   gr (direct) = ', (evals_all[ii]*kt ).imag])
+        '   gr (indirect) = ', (evals_all[ii]*kt ).imag])
+
         plt.show()
 
         print " "
